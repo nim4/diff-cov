@@ -55,25 +55,6 @@ func shouldCountFile(file string) bool {
 	return true
 }
 
-func filterLines(file string, lines []int) []int {
-	b, err := ioutil.ReadFile(file)
-	if err != nil {
-		fmt.Println(err)
-		return lines
-	}
-
-	fileLines := strings.Split(string(b), "\n")
-	var ret []int
-	for _, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(fileLines[line]), "#") {
-			continue
-		}
-		ret = append(ret, line)
-	}
-
-	return ret
-}
-
 func setPackage() bool {
 	if flagPackage == "" {
 		dir, err := os.Getwd()
@@ -129,7 +110,7 @@ func main() {
 		coverage[file] = make(map[int]bool)
 		for _, block := range p.Blocks {
 			for line := block.StartLine; line <= block.EndLine; line++ {
-				coverage[file][line] = true
+				coverage[file][line] = block.Count > 0
 			}
 		}
 	}
@@ -152,17 +133,21 @@ func main() {
 		}
 		fmt.Printf("%s %d\n", file, len(changes))
 
-		lines := filterLines(file, changes)
-		for _, line := range lines {
-			goDiff ++
+		// file has any test coverage?
+		if _, ok := coverage[file]; !ok {
+			fmt.Printf("No coverage found for %q! is %q updated?\n", file, flagCoverProfile)
+			goDiff += len(changes)
+			continue
+		}
 
-			// file has any test coverage?
-			if _, ok := coverage[file]; !ok {
-				continue
-			}
+		for _, line := range changes {
 
-			if _, ok := coverage[file][line]; ok {
-				goTestedDiff++
+			tested, ok := coverage[file][line]
+			if ok {
+				goDiff ++
+				if tested {
+					goTestedDiff++
+				}
 			}
 		}
 	}
