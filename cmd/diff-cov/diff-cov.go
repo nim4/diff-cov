@@ -24,7 +24,8 @@ var (
 
 func fetch() error {
 	out, err := exec.Command(
-		"git", "fetch", "origin", flagTargetBranch,
+		"git", "fetch", "origin",
+		fmt.Sprintf("%s:refs/remotes/origin/%s", flagTargetBranch, flagTargetBranch),
 	).CombinedOutput()
 	if err != nil {
 		fmt.Println(string(out))
@@ -104,7 +105,7 @@ func main() {
 		"target", "origin/master",
 		"Target branch")
 	flag.BoolVar(&flagFetchTarget,
-		"-fetch", true,
+		"fetch", true,
 		"Fetch the target branch")
 	flag.IntVar(&flagMinimumLine,
 		"min-diff", 10,
