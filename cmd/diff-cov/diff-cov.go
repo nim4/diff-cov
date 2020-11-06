@@ -41,7 +41,7 @@ func diff() ([]byte, error) {
 	return ioutil.ReadFile(f.Name())
 }
 
-func shouldCount(file string) bool {
+func shouldCountFile(file string) bool {
 	if !strings.HasSuffix(file, ".go") {
 		return false
 	}
@@ -53,6 +53,25 @@ func shouldCount(file string) bool {
 	}
 
 	return true
+}
+
+func filterLines(file string, lines []int) []int {
+	b, err := ioutil.ReadFile(file)
+	if err != nil {
+		fmt.Println(err)
+		return lines
+	}
+
+	fileLines := strings.Split(string(b), "\n")
+	var ret []int
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(fileLines[line]), "#") {
+			continue
+		}
+		ret = append(ret, line)
+	}
+
+	return ret
 }
 
 func setPackage() bool {
@@ -106,10 +125,11 @@ func main() {
 
 	coverage := make(map[string]map[int]bool, len(ps))
 	for _, p := range ps {
-		coverage[p.FileName] = make(map[int]bool)
+		file := strings.TrimPrefix(p.FileName, flagPackage)
+		coverage[file] = make(map[int]bool)
 		for _, block := range p.Blocks {
 			for line := block.StartLine; line <= block.EndLine; line++ {
-				coverage[p.FileName][line] = true
+				coverage[file][line] = true
 			}
 		}
 	}
@@ -127,19 +147,21 @@ func main() {
 	goDiff := 0
 	goTestedDiff := 0
 	for file, changes := range p.Changed() {
-		if !shouldCount(file) {
+		if !shouldCountFile(file) {
 			continue
 		}
-		fmt.Printf("%s %d\n", flagPackage+file, len(changes))
-		goDiff += len(changes)
+		fmt.Printf("%s %d\n", file, len(changes))
 
-		// file has any test coverage?
-		if _, ok := coverage[flagPackage+file]; !ok {
-			continue
-		}
+		lines := filterLines(file, changes)
+		for _, line := range lines {
+			goDiff ++
 
-		for _, line := range changes {
-			if _, ok := coverage[flagPackage+file][line]; ok {
+			// file has any test coverage?
+			if _, ok := coverage[file]; !ok {
+				continue
+			}
+
+			if _, ok := coverage[file][line]; ok {
 				goTestedDiff++
 			}
 		}
