@@ -18,8 +18,21 @@ var (
 	flagCoverProfile string
 	flagMinimumLine  int
 	flagMinimumCov   float64
+	flagFetchTarget  bool
 	ignore           []string
 )
+
+func fetch() error {
+	out, err := exec.Command(
+		"git", "fetch", "origin", flagTargetBranch,
+	).CombinedOutput()
+	if err != nil {
+		fmt.Println(string(out))
+		return err
+	}
+
+	return nil
+}
 
 func diff() ([]byte, error) {
 	f, err := ioutil.TempFile(os.TempDir(), "diff-cov-")
@@ -90,6 +103,9 @@ func main() {
 	flag.StringVar(&flagTargetBranch,
 		"target", "origin/master",
 		"Target branch")
+	flag.BoolVar(&flagFetchTarget,
+		"-fetch", true,
+		"Fetch the target branch")
 	flag.IntVar(&flagMinimumLine,
 		"min-diff", 10,
 		"Minimum diff size to trigger coverage check")
@@ -101,6 +117,14 @@ func main() {
 	if !setPackage() {
 		fmt.Println("provide package import path: ex. github.com/nim4/example")
 		os.Exit(1)
+	}
+
+	if flagFetchTarget {
+		err := fetch()
+		if err != nil {
+			fmt.Printf("Error fetching %q: %v\n", flagTargetBranch, err)
+			os.Exit(1)
+		}
 	}
 
 	ignore = strings.Split(flagIgnore, ",")
