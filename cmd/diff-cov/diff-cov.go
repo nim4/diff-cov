@@ -24,8 +24,7 @@ var (
 
 func fetch() error {
 	out, err := exec.Command(
-		"git", "fetch", "origin",
-		fmt.Sprintf("%s:refs/remotes/origin/%s", flagTargetBranch, flagTargetBranch),
+		"git", "fetch", "--all",
 	).CombinedOutput()
 	if err != nil {
 		fmt.Println(string(out))
