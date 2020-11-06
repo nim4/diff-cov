@@ -6,7 +6,6 @@ import (
 	"github.com/waigani/diffparser"
 	"golang.org/x/tools/cover"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,19 +22,21 @@ var (
 )
 
 func diff() ([]byte, error) {
-	f, err := ioutil.TempFile(os.TempDir(), "diff-")
+	f, err := ioutil.TempFile(os.TempDir(), "diff-cov-")
 	if err != nil {
 		return nil, err
 	}
+	_ = f.Close()
 
 	output := fmt.Sprintf("--output=%s", f.Name())
 
-	err = exec.Command(
+	out, err := exec.Command(
 		"git", "diff",
 		"--ignore-all-space", "--ignore-blank-lines",
 		"--no-color", "--no-ext-diff", "-U0", output, flagTargetBranch,
-	).Run()
+	).CombinedOutput()
 	if err != nil {
+		fmt.Println(string(out))
 		return nil, err
 	}
 
@@ -105,7 +106,8 @@ func main() {
 	ignore = strings.Split(flagIgnore, ",")
 	ps, err := cover.ParseProfiles(flagCoverProfile)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("Error parsing %q: %v\n", flagCoverProfile, err)
+		os.Exit(1)
 	}
 
 	coverage := make(map[string]map[int]bool, len(ps))
@@ -121,12 +123,14 @@ func main() {
 
 	b, err := diff()
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("Error getting diff: %v\n", err)
+		os.Exit(1)
 	}
 
 	p, err := diffparser.Parse(string(b))
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("Error parsing diff: %v\n", err)
+		os.Exit(1)
 	}
 
 	goDiff := 0
