@@ -4,7 +4,7 @@ calculates test coverage of the changed go files
 
 ## Install
 ```shell script
-$ go install github.com/nim4/cmd/diff-cov
+$ go get github.com/nim4/diff-cov/cmd/diff-cov
 ```
 
 ## Usage
