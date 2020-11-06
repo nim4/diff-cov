@@ -17,6 +17,7 @@ var (
 	flagIgnore       string
 	flagTargetBranch string
 	flagCoverProfile string
+	flagMinimumLine  int
 	flagMinimumCov   float64
 	ignore           []string
 )
@@ -88,8 +89,11 @@ func main() {
 	flag.StringVar(&flagTargetBranch,
 		"target", "origin/master",
 		"Target branch")
+	flag.IntVar(&flagMinimumLine,
+		"min-diff", 10,
+		"Minimum diff size to trigger coverage check")
 	flag.Float64Var(&flagMinimumCov,
-		"min", 50,
+		"min-cov", 50,
 		"Minimum required test coverage")
 	flag.Parse()
 
@@ -144,16 +148,16 @@ func main() {
 
 			tested, ok := coverage[file][line]
 			if ok {
-				goDiff ++
+				goDiff++
 				if tested {
 					goTestedDiff++
 				}
 			}
 		}
 	}
-	difCov := float64(goTestedDiff)/float64(goDiff)*100
+	difCov := float64(goTestedDiff) / float64(goDiff) * 100
 	fmt.Printf("%d/%d = %.2f%%\n", goTestedDiff, goDiff, difCov)
-	if difCov < flagMinimumCov {
+	if goDiff > flagMinimumLine && difCov < flagMinimumCov {
 		os.Exit(1)
 	}
 }
