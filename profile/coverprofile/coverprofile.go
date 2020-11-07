@@ -20,7 +20,7 @@ func NewGoProfile(packageName string, profilePath string) *GoProfile {
 	}
 }
 
-func (g GoProfile) GetCoverage(ignoreFiles []string) (profile.Coverage, error) {
+func (g GoProfile) GetCoverage(ignoreFiles []string, verbose bool) (profile.Coverage, error) {
 	ps, err := cover.ParseProfiles(g.profilePath)
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing %q: %v\n", g.profilePath, err)
@@ -29,6 +29,9 @@ func (g GoProfile) GetCoverage(ignoreFiles []string) (profile.Coverage, error) {
 	coverage := make(profile.Coverage, len(ps))
 	for _, p := range ps {
 		if !utils.ShouldCountFile(p.FileName, ignoreFiles) {
+			if verbose {
+				fmt.Printf("Ignoring %q\n", p.FileName)
+			}
 			continue
 		}
 

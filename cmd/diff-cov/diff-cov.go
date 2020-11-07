@@ -100,7 +100,7 @@ func main() {
 
 	ignoreFiles := strings.Split(flagIgnoreFiles, ",")
 	profile := coverprofile.NewGoProfile(flagPackage, flagCoverProfile)
-	coverage, err := profile.GetCoverage(ignoreFiles)
+	coverage, err := profile.GetCoverage(ignoreFiles, flagVerbose)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

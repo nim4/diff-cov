@@ -18,6 +18,9 @@ func Calculate(coverage profile.Coverage, diff string, ignoreFiles []string, ver
 
 	for file, changes := range p.Changed() {
 		if !utils.ShouldCountFile(file, ignoreFiles) {
+			if verbose {
+				fmt.Printf("Ignoring %q\n", file)
+			}
 			continue
 		}
 		if verbose {
