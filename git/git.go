@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 // TODO: Fetch target not master
@@ -21,14 +22,14 @@ func Fetch() error {
 
 func CurrentBranch() (string, error) {
 	out, err := exec.Command(
-		"git", "branch", "--show-current",
+		"git", "rev-parse", "--abbrev-ref", "HEAD",
 	).CombinedOutput()
 	if err != nil {
 		fmt.Println(string(out))
 		return "", fmt.Errorf("error getting current branch: %v\n%v", string(out), err)
 	}
 
-	return string(out), nil
+	return strings.TrimSpace(string(out)), nil
 }
 
 func Diff(targetBranch string) (string, error) {
