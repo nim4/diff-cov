@@ -3,72 +3,24 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/waigani/diffparser"
-	"golang.org/x/tools/cover"
-	"io/ioutil"
+	"github.com/nim4/diff-cov/diffCoverage"
+	"github.com/nim4/diff-cov/git"
+	"github.com/nim4/diff-cov/profile/coverprofile"
 	"os"
-	"os/exec"
 	"strings"
 )
 
 var (
 	flagPackage      string
-	flagIgnore       string
+	flagIgnoreFiles  string
+	flagIgnoreBranch string
 	flagTargetBranch string
 	flagCoverProfile string
 	flagMinimumLine  int
 	flagMinimumCov   float64
 	flagFetchTarget  bool
-	ignore           []string
+	flagVerbose      bool
 )
-
-func fetch() error {
-	out, err := exec.Command(
-		"git", "fetch", "origin", "master:refs/remotes/origin/master",
-	).CombinedOutput()
-	if err != nil {
-		fmt.Println(string(out))
-		return err
-	}
-
-	return nil
-}
-
-func diff() ([]byte, error) {
-	f, err := ioutil.TempFile(os.TempDir(), "diff-cov-")
-	if err != nil {
-		return nil, err
-	}
-	_ = f.Close()
-
-	output := fmt.Sprintf("--output=%s", f.Name())
-	target := fmt.Sprintf("%s..HEAD", flagTargetBranch)
-	out, err := exec.Command(
-		"git", "diff",
-		"--ignore-all-space", "--ignore-blank-lines",
-		"--no-color", "--no-ext-diff", "-U0", output, target,
-	).CombinedOutput()
-	if err != nil {
-		fmt.Println(string(out))
-		return nil, err
-	}
-
-	return ioutil.ReadFile(f.Name())
-}
-
-func shouldCountFile(file string) bool {
-	if !strings.HasSuffix(file, ".go") {
-		return false
-	}
-
-	for _, suffix := range ignore {
-		if strings.HasSuffix(file, suffix) {
-			return false
-		}
-	}
-
-	return true
-}
 
 func setPackage() bool {
 	if flagPackage == "" {
@@ -93,10 +45,13 @@ func setPackage() bool {
 func main() {
 	flag.StringVar(&flagCoverProfile,
 		"coverprofile", "cover.out",
-		"Path of coverage profile file")
-	flag.StringVar(&flagIgnore,
-		"ignore", "_test.go,_gen.go,_mock.go",
+		"Path of 'coverprofile' file")
+	flag.StringVar(&flagIgnoreFiles,
+		"ignore-files", "_test.go,_gen.go,_mock.go",
 		"Ignore files with given suffix")
+	flag.StringVar(&flagIgnoreBranch,
+		"ignore-branches", "hotfix,bugfix",
+		"Ignore branches which contains given words(case-insensitive)")
 	flag.StringVar(&flagPackage,
 		"package", "",
 		"Package import path(if not set, will try to extract it from the current working directory)")
@@ -107,12 +62,28 @@ func main() {
 		"fetch", true,
 		"Fetch the target branch")
 	flag.IntVar(&flagMinimumLine,
-		"min-diff", 10,
+		"min-diff", 0,
 		"Minimum diff size to trigger coverage check")
 	flag.Float64Var(&flagMinimumCov,
-		"min-cov", 50,
+		"min-cov", 0,
 		"Minimum required test coverage")
+	flag.BoolVar(&flagVerbose,
+		"v", false,
+		"Verbose")
 	flag.Parse()
+
+	cb, err := git.CurrentBranch()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	for _, ignoreBranch := range strings.Split(flagIgnoreBranch, ",") {
+		if strings.Contains(strings.ToLower(cb), ignoreBranch) {
+			fmt.Printf("Ignoring branch %q(contains %q)! Good bye!\n", cb, ignoreBranch)
+			os.Exit(0)
+		}
+	}
 
 	if !setPackage() {
 		fmt.Println("provide package import path: ex. github.com/nim4/example")
@@ -120,69 +91,33 @@ func main() {
 	}
 
 	if flagFetchTarget {
-		err := fetch()
+		err := git.Fetch()
 		if err != nil {
-			fmt.Printf("Error fetching %q: %v\n", flagTargetBranch, err)
+			fmt.Println(err)
 			os.Exit(1)
 		}
 	}
 
-	ignore = strings.Split(flagIgnore, ",")
-	ps, err := cover.ParseProfiles(flagCoverProfile)
+	ignoreFiles := strings.Split(flagIgnoreFiles, ",")
+	profile := coverprofile.NewGoProfile(flagPackage, flagCoverProfile)
+	coverage, err := profile.GetCoverage(ignoreFiles)
 	if err != nil {
-		fmt.Printf("Error parsing %q: %v\n", flagCoverProfile, err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	coverage := make(map[string]map[int]bool, len(ps))
-	for _, p := range ps {
-		file := strings.TrimPrefix(p.FileName, flagPackage)
-		coverage[file] = make(map[int]bool)
-		for _, block := range p.Blocks {
-			for line := block.StartLine; line <= block.EndLine; line++ {
-				coverage[file][line] = block.Count > 0
-			}
-		}
-	}
-
-	b, err := diff()
+	diff, err := git.Diff(flagTargetBranch)
 	if err != nil {
-		fmt.Printf("Error getting diff: %v\n", err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	p, err := diffparser.Parse(string(b))
+	goDiff, goTestedDiff, err := diffCoverage.Calculate(coverage, diff, ignoreFiles, flagVerbose)
 	if err != nil {
-		fmt.Printf("Error parsing diff: %v\n", err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	goDiff := 0
-	goTestedDiff := 0
-	for file, changes := range p.Changed() {
-		if !shouldCountFile(file) {
-			continue
-		}
-		fmt.Printf("%s %d\n", file, len(changes))
-
-		// file has any test coverage?
-		if _, ok := coverage[file]; !ok {
-			fmt.Printf("No coverage found for %q! is %q updated?\n", file, flagCoverProfile)
-			goDiff += len(changes)
-			continue
-		}
-
-		for _, line := range changes {
-
-			tested, ok := coverage[file][line]
-			if ok {
-				goDiff++
-				if tested {
-					goTestedDiff++
-				}
-			}
-		}
-	}
 	difCov := 0.0
 	if goDiff > 0 {
 		difCov = float64(goTestedDiff) / float64(goDiff) * 100
