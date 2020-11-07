@@ -24,7 +24,7 @@ var (
 
 func fetch() error {
 	out, err := exec.Command(
-		"git", "fetch", "--all",
+		"git", "fetch", "origin", "master:refs/remotes/origin/master",
 	).CombinedOutput()
 	if err != nil {
 		fmt.Println(string(out))
@@ -42,11 +42,11 @@ func diff() ([]byte, error) {
 	_ = f.Close()
 
 	output := fmt.Sprintf("--output=%s", f.Name())
-
+	target := fmt.Sprintf("%s..HEAD", flagTargetBranch)
 	out, err := exec.Command(
 		"git", "diff",
 		"--ignore-all-space", "--ignore-blank-lines",
-		"--no-color", "--no-ext-diff", "-U0", output, flagTargetBranch,
+		"--no-color", "--no-ext-diff", "-U0", output, target,
 	).CombinedOutput()
 	if err != nil {
 		fmt.Println(string(out))
@@ -183,7 +183,10 @@ func main() {
 			}
 		}
 	}
-	difCov := float64(goTestedDiff) / float64(goDiff) * 100
+	difCov := 0.0
+	if goDiff > 0 {
+		difCov = float64(goTestedDiff) / float64(goDiff) * 100
+	}
 	fmt.Printf("%d/%d = %.2f%%\n", goTestedDiff, goDiff, difCov)
 	if goDiff > flagMinimumLine && difCov < flagMinimumCov {
 		os.Exit(1)
